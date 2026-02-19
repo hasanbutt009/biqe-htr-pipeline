@@ -1,0 +1,100 @@
+# =============================================================================
+# BIQE HTR Pipeline - Local Development Environment
+# =============================================================================
+# Use this for local testing before deploying to Cloud Run Jobs.
+#
+# Usage:
+#   docker-compose up --build
+#
+# Prerequisites:
+#   - Copy .env.example to .env and fill in values
+#   - Place GCP service account key in ./secrets/service-account.json
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # HTR Pipeline Worker (simulates Cloud Run Job)
+  # ---------------------------------------------------------------------------
+  htr-worker:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    container_name: biqe-htr-worker
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/service-account.json
+      - JOB_ID=local-test-${RANDOM:-001}
+      - INPUT_PATH=${INPUT_PATH:-gs://test-bucket/test-images/}
+      - LOG_FORMAT=console
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount service account for GCP auth
+      - ./secrets:/secrets:ro
+      # Mount source for hot-reload during development
+      - ./src:/app/src:ro
+    networks:
+      - htr-network
+
+  # ---------------------------------------------------------------------------
+  # Pub/Sub Emulator (for local testing without real GCP)
+  # ---------------------------------------------------------------------------
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    container_name: biqe-pubsub-emulator
+    command: >
+      gcloud beta emulators pubsub start 
+        --host-port=0.0.0.0:8085 
+        --project=local-test
+    ports:
+      - "8085:8085"
+    networks:
+      - htr-network
+
+  # ---------------------------------------------------------------------------
+  # GCS Emulator (fake-gcs-server for local storage testing)
+  # ---------------------------------------------------------------------------
+  gcs-emulator:
+    image: fsouza/fake-gcs-server:latest
+    container_name: biqe-gcs-emulator
+    command: -scheme http -port 4443 -external-url http://gcs-emulator:4443
+    ports:
+      - "4443:4443"
+    volumes:
+      - gcs-data:/data
+    networks:
+      - htr-network
+
+  # ---------------------------------------------------------------------------
+  # Test Runner (for running pytest in container)
+  # ---------------------------------------------------------------------------
+  test-runner:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    container_name: biqe-test-runner
+    command: pytest tests/ -v --tb=short
+    env_file:
+      - .env
+    environment:
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - STORAGE_EMULATOR_HOST=http://gcs-emulator:4443
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    depends_on:
+      - pubsub-emulator
+      - gcs-emulator
+    networks:
+      - htr-network
+    profiles:
+      - test
+
+networks:
+  htr-network:
+    driver: bridge
+
+volumes:
+  gcs-data:

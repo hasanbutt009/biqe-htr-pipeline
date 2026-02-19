@@ -1,0 +1,34 @@
+# BIQE HTR Pipeline - Python Dependencies
+# =========================================
+# Updated: Feb 7, 2026 - Upgraded to google-genai SDK (latest)
+
+# Core GCP
+google-cloud-storage>=2.14.0
+google-cloud-pubsub>=2.18.0
+google-cloud-firestore>=2.14.0
+google-cloud-run>=0.10.0
+
+# Gemini AI - NEW SDK (replaces google-cloud-aiplatform)
+# https://cloud.google.com/vertex-ai/docs/generative-ai/start/quickstarts/api-quickstart
+google-genai>=1.0.0
+
+# Legacy (kept for compatibility with other Vertex AI features)
+google-cloud-aiplatform>=1.72.0
+
+# API Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.7
+
+# Configuration
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Retry & Resilience (CRITICAL for quota management)
+tenacity>=8.2.0
+
+# HTTP Client for OpenRouter API (v2.4.0)
+httpx>=0.26.0
+
+# Logging
+structlog>=24.1.0
