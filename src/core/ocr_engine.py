@@ -1305,14 +1305,31 @@ William Benjamin Smith, Esquire
 """
 
     def __init__(self):
-        """Initialize the OpenRouter OCR Engine."""
+        """
+        Initialize the OpenRouter OCR Engine.
+        
+        v5.3: Added persistent httpx.Client for connection reuse.
+        This prevents creating new TCP/TLS connections per request.
+        """
         self._api_key = settings.openrouter_api_key
         if not self._api_key:
             logger.warning("OPENROUTER_API_KEY not set - OpenRouter engine will fail if used")
         
+        # v5.3: Persistent HTTP client for connection pooling (memory optimization)
+        # Keeps connections alive and reuses them across multiple API calls
+        self._http_client = httpx.Client(
+            timeout=120.0,
+            limits=httpx.Limits(
+                max_keepalive_connections=10,
+                max_connections=20,
+                keepalive_expiry=300.0,  # 5 minutes
+            ),
+        )
+        
         # Use same model names as Vertex for consistency
         self._flash_model_name = "gemini-3-flash-preview"
-        self._pro_model_name = "gemini-3-pro-preview"
+        # v5.2: Use GPT-4o for Step 2 instead of slow Gemini 3 Pro
+        self._pro_model_name = "gpt-4o"
         
         # Default settings
         self._default_confidence_threshold = settings.confidence_threshold
@@ -1461,15 +1478,15 @@ William Benjamin Smith, Esquire
             "X-Title": "BIQE HTR OpenRouter API"
         }
         
-        # Use synchronous httpx client
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                self.OPENROUTER_BASE_URL,
-                json=payload,
-                headers=headers
-            )
-            response.raise_for_status()
-            data = response.json()
+        # v5.3: Use persistent httpx client for connection reuse (memory optimization)
+        # This prevents creating new TCP/TLS connections per API call
+        response = self._http_client.post(
+            self.OPENROUTER_BASE_URL,
+            json=payload,
+            headers=headers
+        )
+        response.raise_for_status()
+        data = response.json()
         
         # Handle OpenRouter response - validate structure before accessing
         if "error" in data:
@@ -1484,11 +1501,21 @@ William Benjamin Smith, Esquire
             raise ValueError("OpenRouter returned invalid message structure")
         
         content = data["choices"][0]["message"]["content"]
+        
+        # v5.3: Explicit memory cleanup of large objects (memory optimization)
+        # The base64 string and payload can be large (1-5MB per image)
+        del payload
+        del data
+        
         if not content:
             logger.warning("OpenRouter returned empty content")
             return "", 0.0
         
         text, confidence = self._parse_response(content)
+        
+        # v5.3: Clean up content string after parsing
+        del content
+        
         return text, confidence
 
     def _parse_response(self, response_text: str) -> tuple[str, float]:
@@ -1874,12 +1901,23 @@ OUTPUT FORMAT:
 
 
 # =============================================================================
-# v2.4.0: Factory Function for Provider Selection
+# v5.3: Singleton Factory Function for Provider Selection (Memory Fix)
 # =============================================================================
+
+# Global singleton instances for OCR engines (memory optimization)
+# These are reused across all requests to prevent connection exhaustion
+_vertex_engine: Optional[OCREngine] = None
+_openrouter_engine: Optional[OpenRouterOCREngine] = None
+
 
 def get_ocr_engine(provider: str = "vertex") -> OCREngine | OpenRouterOCREngine:
     """
     Factory function to get the appropriate OCR engine based on provider.
+    
+    v5.3: Now uses singleton pattern to prevent memory leaks.
+    - Single OCR engine instance per provider
+    - gRPC/HTTP connections are reused
+    - Memory usage stays constant regardless of request count
     
     Args:
         provider: "vertex" or "openrouter"
@@ -1891,9 +1929,15 @@ def get_ocr_engine(provider: str = "vertex") -> OCREngine | OpenRouterOCREngine:
         engine = get_ocr_engine(provider="openrouter")
         result = engine.process_image_bytes(...)
     """
+    global _vertex_engine, _openrouter_engine
+    
     if provider == "openrouter":
-        logger.info("Creating OpenRouter OCR engine")
-        return OpenRouterOCREngine()
+        if _openrouter_engine is None:
+            logger.info("Creating OpenRouter OCR engine (singleton)")
+            _openrouter_engine = OpenRouterOCREngine()
+        return _openrouter_engine
     else:
-        logger.info("Creating Vertex AI OCR engine")
-        return OCREngine()
+        if _vertex_engine is None:
+            logger.info("Creating Vertex AI OCR engine (singleton)")
+            _vertex_engine = OCREngine()
+        return _vertex_engine

@@ -53,8 +53,8 @@ MAX_RETRIES = 10  # More retries for high load scenarios
 RETRY_DELAY = 3   # Longer delay between retries
 
 # Parallel settings
-PARALLEL_SUBMIT = 5   # Concurrent uploads
-PARALLEL_POLL = 20    # Concurrent status checks
+PARALLEL_SUBMIT = 10   # Concurrent uploads
+PARALLEL_POLL = 10    # Concurrent status checks
 
 # Poll settings
 POLL_INTERVAL = 3  # seconds
