@@ -1260,7 +1260,7 @@ class OpenRouterOCREngine:
     
     Supported models:
     - gemini-3-flash-preview (google/gemini-3-flash-preview)
-    - gemini-3-pro-preview (google/gemini-3-pro-preview)
+    - gemini-3.1-pro-preview (google/gemini-3.1-pro-preview)
     """
     
     OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -1268,9 +1268,9 @@ class OpenRouterOCREngine:
     # Model mapping: internal name -> OpenRouter model ID
     MODELS = {
         "gemini-3-flash-preview": "google/gemini-3-flash-preview",
-        "gemini-3-pro-preview": "google/gemini-3-pro-preview",
+        "gemini-3.1-pro-preview": "google/gemini-3.1-pro-preview",
         "flash": "google/gemini-3-flash-preview",
-        "pro": "google/gemini-3-pro-preview",
+        "pro": "google/gemini-3.1-pro-preview",
     }
     
     # Same system prompt as Vertex engine
